@@ -2,25 +2,18 @@
 
 pragma solidity ^0.8.0;
 
-
-
-
 contract ercToken {
 
     string public symbol = "TEST";
     string public name = "TEST";
-
     uint256 public decimals = 18;
     uint256 public totalSupply = 1000000000 * 10**18; 
 
     mapping(address => uint256) internal balances;
     mapping(address => mapping(address => uint256)) internal allowed;
 
-
     event Transfer(address indexed from, address indexed to, uint256 amount);
-
     event Approval(address indexed owner, address indexed spender, uint256 amount);
-
 
     constructor() public {
         balances[msg.sender] = totalSupply;
@@ -41,11 +34,7 @@ contract ercToken {
         return balances[owner];
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
         require(amount <= balances[from], "BALANCE_NOT_ENOUGH");
         require(amount <= allowed[from][msg.sender], "ALLOWANCE_NOT_ENOUGH");
 
