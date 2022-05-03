@@ -1,5 +1,9 @@
 pragma solidity 0.6.12;
 
+
+// import "../../interfaces/IERC20.sol";
+
+
 contract Owned {
 
     address private mOwner;   
