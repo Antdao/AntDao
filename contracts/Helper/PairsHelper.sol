@@ -144,10 +144,7 @@ contract PairsHelper {
         return tokensAddresses(factoryAddress, pageSize, pageNbr, 0);
     }
 
-    function tokensAddresses(address factoryAddress)
-        public
-        view
-        returns (address[] memory)
+    function tokensAddresses(address factoryAddress) public view returns (address[] memory)
     {
         uint256 _pairsLength = pairsLength(factoryAddress);
         return tokensAddresses(factoryAddress, _pairsLength, 0, 0);
@@ -161,11 +158,7 @@ contract PairsHelper {
         return pairsAddresses(factoryAddress, pageSize, pageNbr, 0);
     }
 
-    function pairsAddresses(address factoryAddress)
-        public
-        view
-        returns (address[] memory)
-    {
+    function pairsAddresses(address factoryAddress) public view returns (address[] memory){
         uint256 _pairsLength = pairsLength(factoryAddress);
         return pairsAddresses(factoryAddress, _pairsLength, 0, 0);
     }
