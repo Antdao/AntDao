@@ -279,11 +279,7 @@ contract FarmHelper is BaseHelper, TokenHelper {
             farmInfo.pools = getPools(_farmAddr);
     }
 
-    function getFarmDetail(address _farm, address _user) 
-        public
-        view
-        returns(FarmInfo memory farmInfo, UserPoolInfo[] memory userInfos) 
-    {
+    function getFarmDetail(address _farm, address _user)  public view returns(FarmInfo memory farmInfo, UserPoolInfo[] memory userInfos) {
         IFarm farm = IFarm(_farm);
         farmInfo.addr = _farm;
         farmInfo.templateId = farmFactory.getTemplateId(_farm);
