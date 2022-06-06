@@ -87,10 +87,7 @@ contract ANTMasterChef is IAntFarm, ANTAccessControls, SafeTransfer {
             uint256 _startBlock,
             address _divaddr,
             address _accessControls
-    )
-        external
-        pure
-        returns (bytes memory _data)
+    ) external pure returns (bytes memory _data)
     {
         return abi.encode(_rewards, _rewardsPerBlock, _startBlock, _divaddr, _accessControls);
     }
