@@ -355,7 +355,7 @@ contract HyperbolicAuction is IAntMarket, ANTAccessControls, BoringBatchable, Sa
         require(hasAdminRole(msg.sender));
         require(_startTime < 10000000000, "HyperbolicAuction: enter an unix timestamp in seconds, not miliseconds");
         require(_endTime < 10000000000, "HyperbolicAuction: enter an unix timestamp in seconds, not miliseconds");
-        require(_startTime >= block.timestamp, "HyperbolicAuction: start time is before current time");
+        require(_startTime >= block.timestamp, "HyperbolicAuction: start time msut be older than current time");
         require(_endTime > _startTime, "HyperbolicAuction: end time must be older than start price");
         require(marketStatus.commitmentsTotal == 0, "HyperbolicAuction: auction cannot have already started");
 
