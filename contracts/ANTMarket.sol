@@ -89,7 +89,7 @@ contract ANTMarket is SafeTransfer {
     function setLocked(bool _locked) external {
         require(
             accessControls.hasAdminRole(msg.sender),
-            "ANTMarket: Sender must be admin"
+            "ANTMarket: Sender must be admin address"
         );
         locked = _locked;
     }
