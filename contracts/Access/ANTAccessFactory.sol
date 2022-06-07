@@ -70,7 +70,7 @@ contract ANTAccessFactory is CloneFactory {
     function setDev(address _devaddr) external {
         require(
             accessControls.hasAdminRole(msg.sender),
-            "ANTAccessFactory.setMinimumFee: Sender must be admin"
+            "ANTAccessFactory.setMinimumFee: Sender must be admin address"
         );
         emit DevAddressUpdated(devaddr, _devaddr);
         devaddr = _devaddr;
