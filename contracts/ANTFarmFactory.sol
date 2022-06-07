@@ -106,7 +106,7 @@ contract ANTFarmFactory is CloneFactory {
         require(
             accessControls.hasAdminRole(msg.sender) ||
             accessControls.hasOperatorRole(msg.sender),
-            "ANTFarmFactory: Sender must be admin"
+            "ANTFarmFactory: Sender must be admin address"
         );
         currentTemplateId[_templateType] = _templateId;
     }
