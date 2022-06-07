@@ -45,7 +45,7 @@ contract ANTFermenter is CloneFactory {
     function setLocked(bool _locked) external {
         require(
             accessControls.hasAdminRole(msg.sender),
-            "ANTFermenter: Sender must be admin"
+            "ANTFermenter: Sender must be admin address"
         );
         locked = _locked;
     }
