@@ -93,7 +93,7 @@ contract ANTTokenFactory is CloneFactory, SafeTransfer{
     function setLocked(bool _locked) external {
         require(
             accessControls.hasAdminRole(msg.sender),
-            "ANTTokenFactory: Sender must be admin"
+            "ANTTokenFactory: Sender must be admin address"
         );
         locked = _locked;
     }
