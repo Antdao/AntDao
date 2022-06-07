@@ -51,20 +51,20 @@ contract ListFactory is CloneFactory, SafeTransfer {
     }
 
     function deprecateFactory(address _newAddress) external {
-        require(accessControls.hasAdminRole(msg.sender), "ListFactory: Sender must be admin");
+        require(accessControls.hasAdminRole(msg.sender), "ListFactory: Sender must be admin address");
         require(newAddress == address(0));
         emit FactoryDeprecated(_newAddress);
         newAddress = _newAddress;
     }
 
     function setMinimumFee(uint256 _minimumFee) external {
-        require(accessControls.hasAdminRole(msg.sender), "ListFactory: Sender must be admin");
+        require(accessControls.hasAdminRole(msg.sender), "ListFactory: Sender must be admin address");
         emit MinimumFeeUpdated(minimumFee, _minimumFee);
         minimumFee = _minimumFee;
     }
 
     function setDividends(address payable _divaddr) external  {
-        require(accessControls.hasAdminRole(msg.sender), "ANTTokenFactory: Sender must be Admin");
+        require(accessControls.hasAdminRole(msg.sender), "ANTTokenFactory: Sender must be admin address");
         antDiv = _divaddr;
     }
 
