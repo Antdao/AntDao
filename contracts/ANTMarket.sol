@@ -20,6 +20,7 @@ contract ANTMarket is SafeTransfer {
 
     bool private initialised;
 
+    /// @notice Struct to track Auction template.
     struct Auction {
         bool exists;
         uint64 templateId;
@@ -32,14 +33,19 @@ contract ANTMarket is SafeTransfer {
 
     IBentoBoxFactory public bentoBox;
 
+    /// @notice Mapping from market template id to market template address.
     mapping(uint256 => address) private auctionTemplates;
 
+    /// @notice Mapping from market template address to market template id.
     mapping(address => uint256) private auctionTemplateToId;
 
+    /// @notice mapping from template type to template id
     mapping(uint256 => uint256) public currentTemplateId;
 
+    /// @notice Mapping from auction created through this contract to Auction struct.
     mapping(address => Auction) public auctionInfo;
 
+    /// @notice Struct to define fees.
     struct MarketFees {
         uint128 minimumFee;
         uint32 integratorFeePct;
