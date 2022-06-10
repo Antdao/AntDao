@@ -148,11 +148,7 @@ contract CalculationsAntswap {
 
 
 
-    function getPriceFromRouterUsdc(address tokenAddress)
-        public
-        view
-        returns (uint256)
-    {
+    function getPriceFromRouterUsdc(address tokenAddress) public view returns (uint256){
         return getPriceFromRouter(tokenAddress, usdcAddress);
     }
 
@@ -165,11 +161,7 @@ contract CalculationsAntswap {
         }
     }
 
-    function getRouterForLpToken(address tokenAddress)
-        public
-        view
-        returns (PriceRouter)
-    {
+    function getRouterForLpToken(address tokenAddress) public view returns (PriceRouter){
         Pair lpToken = Pair(tokenAddress);
         address factoryAddress = lpToken.factory();
         if (factoryAddress == primaryFactoryAddress) {
@@ -180,11 +172,7 @@ contract CalculationsAntswap {
         revert();
     }
 
-    function getLpTokenTotalLiquidityUsdc(address tokenAddress)
-        public
-        view
-        returns (uint256)
-    {
+    function getLpTokenTotalLiquidityUsdc(address tokenAddress) public view returns (uint256){
         Pair pair = Pair(tokenAddress);
         address token0Address = pair.token0();
         address token1Address = pair.token1();
@@ -201,11 +189,7 @@ contract CalculationsAntswap {
         return totalLiquidity;
     }
 
-    function getLpTokenPriceUsdc(address tokenAddress)
-        public
-        view
-        returns (uint256)
-    {
+    function getLpTokenPriceUsdc(address tokenAddress) public view returns (uint256){
         Pair pair = Pair(tokenAddress);
         uint256 totalLiquidity = getLpTokenTotalLiquidityUsdc(tokenAddress);
         uint256 totalSupply = pair.totalSupply();
