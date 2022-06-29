@@ -40,9 +40,7 @@ contract TokenVault is SafeTransfer {
         uint256 _amount,
         uint256 _unlockTime,
         address payable _withdrawer
-    )
-        public returns (uint256 _id)
-    {
+    ) public returns (uint256 _id){
         require(_amount > 0, 'token amount is Zero');
         require(_unlockTime < 10000000000, 'Enter an unix timestamp in seconds, not miliseconds');
         require(_withdrawer != address(0));
@@ -70,9 +68,7 @@ contract TokenVault is SafeTransfer {
         uint256 _index,
         uint256 _id,
         uint256 _amount
-    )
-        external
-    {
+    ) external {
         require(_amount > 0, 'token amount is Zero');
         uint256 id = users[msg.sender].lockToItems[_tokenAddress][_index];
         Item storage userItem = lockedItem[id];
@@ -91,13 +87,7 @@ contract TokenVault is SafeTransfer {
         emit onUnlock(_tokenAddress, _amount);
     }
 
-    function getItemAtUserIndex(
-        uint256 _index,
-        address _tokenAddress,
-        address _user
-    )
-        external view returns (uint256, uint256, address, uint256)
-    {
+    function getItemAtUserIndex(uint256 _index,address _tokenAddress, address _user) external view returns (uint256, uint256, address, uint256) {
         uint256 id = users[_user].lockToItems[_tokenAddress][_index];
         Item storage item = lockedItem[id];
         return (item.amount, item.unlockTime, item.owner, id);
