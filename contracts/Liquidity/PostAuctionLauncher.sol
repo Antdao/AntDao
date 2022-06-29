@@ -257,9 +257,7 @@ contract PostAuctionLauncher is ANTAccessControls, SafeTransfer, ReentrancyGuard
 
     }
 
-    function initLauncher(
-        bytes calldata _data
-    ) public {
+    function initLauncher( bytes calldata _data) public {
         (
             address _market,
             address _factory,
@@ -285,10 +283,7 @@ contract PostAuctionLauncher is ANTAccessControls, SafeTransfer, ReentrancyGuard
             address _wallet,
             uint256 _liquidityPercent,
             uint256 _locktime
-    )
-        external 
-        pure
-        returns (bytes memory _data)
+    ) external  pure returns (bytes memory _data)
     {
             return abi.encode(_market,
                                 _factory,
