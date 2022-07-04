@@ -56,9 +56,7 @@ contract GnosisSafeFactory {
         address paymentToken,
         uint256 payment,
         address payable paymentReceiver
-    )
-        public returns (ISafeGnosis proxy)
-    {
+    ) public returns (ISafeGnosis proxy){
         bytes memory safeGnosisData = abi.encode("setup(address[],uint256,address,bytes,address,address,uint256,address)",
         _owners,_threshold,to,data,fallbackHandler,paymentToken,payment,paymentReceiver);
         proxy = proxyFactory.createProxy(
