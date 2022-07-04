@@ -127,11 +127,7 @@ contract AuctionCreation is SafeTransfer {
     }
   }
 
-  function createMarket(
-    bytes memory marketData,
-    address token,
-    address pointList
-  ) internal returns (address newMarket, uint256 tokenForSale) {
+  function createMarket(bytes memory marketData, address token, address pointList ) internal returns (address newMarket, uint256 tokenForSale) {
     (uint256 _marketTemplateId, bytes memory mData) = abi.decode(marketData, (uint256, bytes));
 
     tokenForSale = getTokenForSale(_marketTemplateId, mData);
