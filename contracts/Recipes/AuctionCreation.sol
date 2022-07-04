@@ -141,12 +141,7 @@ contract AuctionCreation is SafeTransfer {
     );
   }
 
-  function createLauncher(
-    bytes memory launcherData,
-    address token,
-    uint256 tokenForSale,
-    address newMarket
-  ) internal returns (address newLauncher) {
+  function createLauncher(bytes memory launcherData,address token, uint256 tokenForSale,address newMarket) internal returns (address newLauncher) {
     (uint256 _launcherTemplateId, uint256 _liquidityPercent, uint256 _locktime) = abi.decode(
       launcherData,
       (uint256, uint256, uint256)
