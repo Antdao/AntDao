@@ -476,11 +476,7 @@ contract DutchAuction is IAntMarket, ANTAccessControls, BoringBatchable, SafeTra
         address _admin,
         address _pointList,
         address payable _wallet
-    )
-        external 
-        pure
-        returns (bytes memory _data)
-    {
+    ) external pure returns (bytes memory _data) {
             return abi.encode(
                 _funder,
                 _token,
@@ -496,12 +492,7 @@ contract DutchAuction is IAntMarket, ANTAccessControls, BoringBatchable, SafeTra
             );
     }
         
-    function getBaseInformation() external view returns(
-        address, 
-        uint64,
-        uint64,
-        bool 
-    ) {
+    function getBaseInformation() external view returns(address,  uint64,uint64, bool  ) {
         return (auctionToken, marketInfo.startTime, marketInfo.endTime, marketStatus.finalized);
     }
 
