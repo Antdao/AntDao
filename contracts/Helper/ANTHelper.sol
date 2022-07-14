@@ -99,7 +99,9 @@ contract TokenHelper {
 
         return info;
     }
-
+     function allowance(address _token, address _owner, address _spender) public view returns(uint256) {
+        return IERC20(_token).allowance(_owner, _spender);
+    }
 }
 
 
