@@ -107,6 +107,7 @@ contract AuctionCreation is SafeTransfer {
       string memory _symbol,
       uint256 _initialSupply
     ) = abi.decode(tokenFactoryData, (bool, address, uint256, string, string, uint256));
+    
     if (isDeployed) {
       token = deployedToken;
       IERC20(deployedToken).transferFrom(msg.sender, address(this), _initialSupply);
