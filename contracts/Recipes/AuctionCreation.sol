@@ -52,6 +52,7 @@ interface IAuctionTemplate {
 }
 
 contract AuctionCreation is SafeTransfer {
+
   IAntTokenFactory public antTokenFactory;
   IPointList public pointListFactory;
   IAntLauncher public antLauncher;
