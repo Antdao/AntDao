@@ -1,4 +1,9 @@
 ![](https://raw.githubusercontent.com/Antdao/Antdao/main/image/AntDAO.png)
+
+## Introduce
+
+A multi-chian permissionless token launchpad with better financial services.
+
 ## Antdao features and specialties
 
 1.Permissonless. Anyone can launch a token or initiate the token auction without any KYC or coding knowledge.  
