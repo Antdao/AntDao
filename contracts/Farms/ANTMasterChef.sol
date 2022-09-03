@@ -266,7 +266,29 @@ contract ANTMasterChef is IAntFarm, ANTAccessControls, SafeTransfer {
     function tokenDebt() public view returns(uint256) {
         return  totalRewardDebt.add(tips);
     }
+    
+    function blocksRemaining() public view returns (uint256){
+        if (tokensRemaining() <= tokenDebt()) {
+            return 0;
+        }
+        uint256 rewardsBal = tokensRemaining().sub(tokenDebt()) ;
+        if (rewardsPerBlock > 0) {
+            if (devPercentage > 0) {
+                rewardsBal = rewardsBal.mul(1000).div(devPercentage.add(1000));
+            }
+            return rewardsBal / rewardsPerBlock;
+        } else {
+            return 0;
+        }
+    }
 
+    function claimTips() public {
+        require(msg.sender == devaddr, "dev: wut?");
+        require(tips > 0, "dev: broke");
+        uint256 claimable = tips;
+        tips = 0;
+        safeRewardsTransfer(devaddr, claimable);
+    }
 
     function dev(address _devaddr) public {
         require(msg.sender == devaddr, "dev: wut?");
