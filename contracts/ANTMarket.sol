@@ -219,40 +219,4 @@ contract ANTMarket is SafeTransfer {
         emit AuctionTemplateRemoved(template, _templateId);
     }
 
-    function _addAuctionTemplate(address _template) internal {
-        require(_template != address(0), "ANTMarket: Incorrect template");
-        require(auctionTemplateToId[_template] == 0, "ANTMarket: Template already added");
-        uint256 templateType = IAntMarket(_template).marketTemplate();
-        require(templateType > 0, "ANTMarket: Incorrect template code ");
-        auctionTemplateId++;
 
-        auctionTemplates[auctionTemplateId] = _template;
-        auctionTemplateToId[_template] = auctionTemplateId;
-        currentTemplateId[templateType] = auctionTemplateId;
-        emit AuctionTemplateAdded(_template, auctionTemplateId);
-    }
-
-    function getAuctionTemplate(uint256 _templateId) external view returns (address) {
-        return auctionTemplates[_templateId];
-    }
-
-    function getTemplateId(address _auctionTemplate) external view returns (uint256) {
-        return auctionTemplateToId[_auctionTemplate];
-    }
-
-    function numberOfAuctions() external view returns (uint) {
-        return auctions.length;
-    }
-
-    function minimumFee() external view returns(uint128) {
-        return marketFees.minimumFee;
-    }
-
-    function getMarkets() external view returns(address[] memory) {
-        return auctions;
-    }
-
-    function getMarketTemplateId(address _auction) external view returns(uint64) {
-        return auctionInfo[_auction].templateId;
-    }
-}
