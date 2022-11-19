@@ -182,3 +182,37 @@ contract ANTTokenFactory is CloneFactory, SafeTransfer{
 
     }
 
+
+    function removeTokenTemplate(uint256 _templateId) external {
+        require(
+            accessControls.hasAdminRole(msg.sender) ||
+            accessControls.hasOperatorRole(msg.sender),
+            "ANTTokenFactory: Sender must be operator"
+        );
+        require(tokenTemplates[_templateId] != address(0));
+        address template = tokenTemplates[_templateId];
+        uint256 templateType = IAntToken(tokenTemplates[_templateId]).tokenTemplate();
+        if (currentTemplateId[templateType] == _templateId) {
+            delete currentTemplateId[templateType];
+        }
+        tokenTemplates[_templateId] = address(0);
+        delete tokenTemplateToId[template];
+        emit TokenTemplateRemoved(template, _templateId);
+    }
+
+    function numberOfTokens() external view returns (uint256) {
+        return tokens.length;
+    }
+
+    function getTokens() external view returns (address[] memory) {
+        return tokens;
+    }
+
+    function getTokenTemplate(uint256 _templateId) external view returns (address ) {
+        return tokenTemplates[_templateId];
+    }
+
+    function getTemplateId(address _tokenTemplate) external view returns (uint256) {
+        return tokenTemplateToId[_tokenTemplate];
+    }
+}
