@@ -1,5 +1,3 @@
-![](https://raw.githubusercontent.com/Antdao/Antdao/main/image/AntDAO.png)
-
 ## Introduce
 
 A multi-chian permissionless token launchpad with better financial services.
