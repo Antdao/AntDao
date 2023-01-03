@@ -129,3 +129,48 @@ contract AuctionCreation is SafeTransfer {
     }
   }
 
+  function createMarket(bytes memory marketData, address token, address pointList ) internal returns (address newMarket, uint256 tokenForSale) {
+    (uint256 _marketTemplateId, bytes memory mData) = abi.decode(marketData, (uint256, bytes));
+
+    tokenForSale = getTokenForSale(_marketTemplateId, mData);
+
+    newMarket = antMarket.createMarket(
+      _marketTemplateId,
+      token,
+      tokenForSale,
+      address(0),
+      abi.encodePacked(abi.encode(address(antMarket), token), mData, abi.encode(address(this), pointList, msg.sender))
+    );
+  }
+
+  function createLauncher(bytes memory launcherData,address token, uint256 tokenForSale,address newMarket) internal returns (address newLauncher) {
+    (uint256 _launcherTemplateId, uint256 _liquidityPercent, uint256 _locktime) = abi.decode(
+      launcherData,
+      (uint256, uint256, uint256)
+    );
+
+    if(_liquidityPercent > 0) {
+      newLauncher = antLauncher.createLauncher(
+        _launcherTemplateId,
+        token,
+        (tokenForSale * _liquidityPercent) / 10000,
+        address(0),
+        abi.encode(newMarket, factory, msg.sender, msg.sender, _liquidityPercent, _locktime)
+      );
+
+      IAntMarket(newMarket).setAuctionWallet(payable(newLauncher));
+    }
+  }
+
+  function getTokenForSale(uint256 marketTemplateId, bytes memory mData) internal view returns (uint256 tokenForSale) {
+    address auctionTemplate = antMarket.getAuctionTemplate(marketTemplateId);
+
+    uint256 auctionTemplateId = IAuctionTemplate(auctionTemplate).marketTemplate();
+
+    if (auctionTemplateId == 1) {
+      (, tokenForSale) = abi.decode(mData, (uint256, uint256));
+    } else {
+      tokenForSale = abi.decode(mData, (uint256));
+    }
+  }
+}
