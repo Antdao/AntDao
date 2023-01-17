@@ -331,6 +331,423 @@ contract FarmHelper is BaseHelper, TokenHelper {
         return infos;
     }
 }
+interface IBaseAuction {
+    function getBaseInformation() external view returns (
+            address auctionToken,
+            uint64 startTime,
+            uint64 endTime,
+            bool finalized
+        );
+}
 
+interface IAntMarketFactory {
+    function getMarketTemplateId(address _auction) external view returns(uint64);
+    function getMarkets() external view returns(address[] memory);
+    function numberOfAuctions() external view returns(uint256);
+    function auctions(uint256) external view returns(address);
+}
 
+interface IAntMarket {
+    function paymentCurrency() external view returns (address) ;
+    function auctionToken() external view returns (address) ;
+    function marketPrice() external view returns (uint128, uint128);
+    function marketInfo()
+        external
+        view
+        returns (
+        uint64 startTime,
+        uint64 endTime,
+        uint128 totalTokens
+        );
+    function auctionSuccessful() external view returns (bool);
+    function commitments(address user) external view returns (uint256);
+    function claimed(address user) external view returns (uint256);
+    function tokensClaimable(address user) external view returns (uint256);
+    function hasAdminRole(address user) external view returns (bool);
+}
 
+interface ICrowdsale is IAntMarket {
+    function marketStatus() external view returns(
+        uint128 commitmentsTotal,
+        bool finalized,
+        bool usePointList
+    );
+}
+
+interface IDutchAuction is IAntMarket {
+    function marketStatus() external view returns(
+        uint128 commitmentsTotal,
+        bool finalized,
+        bool usePointList
+    );
+}
+
+interface IBatchAuction is IAntMarket {
+    function marketStatus() external view returns(
+        uint256 commitmentsTotal,
+        uint256 minimumCommitmentAmount,
+        bool finalized,
+        bool usePointList
+    );
+}
+
+interface IHyperbolicAuction is IAntMarket {
+    function marketStatus() external view returns(
+        uint128 commitmentsTotal,
+        bool finalized,
+        bool usePointList
+    );
+}
+
+contract MarketHelper is BaseHelper, TokenHelper, DocumentHepler {
+
+    address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
+    struct CrowdsaleInfo {
+        address addr;
+        address paymentCurrency;
+        uint128 commitmentsTotal;
+        uint128 totalTokens;
+        uint128 rate;
+        uint128 goal;
+        uint64 startTime;
+        uint64 endTime;
+        bool finalized;
+        bool usePointList;
+        bool auctionSuccessful;
+        TokenInfo tokenInfo;
+        TokenInfo paymentCurrencyInfo;
+        Document[] documents;
+    }
+
+    struct DutchAuctionInfo {
+        address addr;
+        address paymentCurrency;
+        uint64 startTime;
+        uint64 endTime;
+        uint128 totalTokens;
+        uint128 startPrice;
+        uint128 minimumPrice;
+        uint128 commitmentsTotal;
+        // uint256 totalTokensCommitted;
+        bool finalized;
+        bool usePointList;
+        bool auctionSuccessful;
+        TokenInfo tokenInfo;
+        TokenInfo paymentCurrencyInfo;
+        Document[] documents;
+    }
+
+    struct BatchAuctionInfo {
+        address addr;
+        address paymentCurrency;
+        uint64 startTime;
+        uint64 endTime;
+        uint128 totalTokens;
+        uint256 commitmentsTotal;
+        uint256 minimumCommitmentAmount;
+        bool finalized;
+        bool usePointList;
+        bool auctionSuccessful;
+        TokenInfo tokenInfo;
+        TokenInfo paymentCurrencyInfo;
+        Document[] documents;
+    }
+
+    struct HyperbolicAuctionInfo {
+        address addr;
+        address paymentCurrency;
+        uint64 startTime;
+        uint64 endTime;
+        uint128 totalTokens;
+        uint128 minimumPrice;
+        uint128 alpha;
+        uint128 commitmentsTotal;
+        bool finalized;
+        bool usePointList;
+        bool auctionSuccessful;
+        TokenInfo tokenInfo;
+        TokenInfo paymentCurrencyInfo;
+        Document[] documents;
+    }
+
+    struct MarketBaseInfo {
+        address addr;
+        uint64 templateId;
+        uint64 startTime;
+        uint64 endTime;
+        bool finalized;
+        TokenInfo tokenInfo;
+    }
+
+    struct PLInfo {
+        TokenInfo token0;
+        TokenInfo token1;
+        address pairToken;
+        address operator;
+        uint256 locktime;
+        uint256 unlock;
+        uint256 deadline;
+        uint256 launchwindow;
+        uint256 expiry;
+        uint256 liquidityAdded;
+        uint256 launched;
+    }
+
+    struct UserMarketInfo {
+        uint256 commitments;
+        uint256 tokensClaimable;
+        uint256 claimed;
+        bool isAdmin;
+    }
+
+    function getMarkets(
+        uint256 pageSize,
+        uint256 pageNbr,
+        uint256 offset
+    ) public view returns (MarketBaseInfo[] memory) {
+        uint256 marketsLength = market.numberOfAuctions();
+        uint256 startIdx = (pageNbr * pageSize) + offset;
+        uint256 endIdx = startIdx + pageSize;
+        MarketBaseInfo[] memory infos;
+        if (endIdx > marketsLength) {
+            endIdx = marketsLength;
+        }
+        if(endIdx < startIdx) {
+            return infos;
+        }
+        infos = new MarketBaseInfo[](endIdx - startIdx);
+
+        for (uint256 marketIdx = 0; marketIdx + startIdx < endIdx; marketIdx++) {
+            address marketAddress = market.auctions(marketIdx + startIdx);
+            infos[marketIdx] = _getMarketInfo(marketAddress);
+        }
+
+        return infos;
+    }
+
+    function getMarkets(
+        uint256 pageSize,
+        uint256 pageNbr
+    ) public view returns (MarketBaseInfo[] memory) {
+        return getMarkets(pageSize, pageNbr, 0);
+    }
+
+    function getMarkets() public view returns (MarketBaseInfo[] memory) {
+        address[] memory markets = market.getMarkets();
+        MarketBaseInfo[] memory infos = new MarketBaseInfo[](markets.length);
+
+        for (uint256 i = 0; i < markets.length; i++) {
+            MarketBaseInfo memory marketInfo = _getMarketInfo(markets[i]);
+            infos[i] = marketInfo;
+        }
+
+        return infos;
+    }
+
+    function _getMarketInfo(address _marketAddress) private view returns (MarketBaseInfo memory marketInfo) {
+            uint64 templateId = market.getMarketTemplateId(_marketAddress);
+            address auctionToken;
+            uint64 startTime;
+            uint64 endTime;
+            bool finalized;
+            (auctionToken, startTime, endTime, finalized) = IBaseAuction(_marketAddress)
+                .getBaseInformation();
+            TokenInfo memory tokenInfo = getTokenInfo(auctionToken);
+
+            marketInfo.addr = _marketAddress;
+            marketInfo.templateId = templateId;
+            marketInfo.startTime = startTime;
+            marketInfo.endTime = endTime;
+            marketInfo.finalized = finalized;
+            marketInfo.tokenInfo = tokenInfo;  
+    }
+
+    function getCrowdsaleInfo(address _crowdsale) public view returns (CrowdsaleInfo memory) {
+        ICrowdsale crowdsale = ICrowdsale(_crowdsale);
+        CrowdsaleInfo memory info;
+
+        info.addr = address(crowdsale);
+        (info.commitmentsTotal, info.finalized, info.usePointList) = crowdsale.marketStatus();
+        (info.startTime, info.endTime, info.totalTokens) = crowdsale.marketInfo();
+        (info.rate, info.goal) = crowdsale.marketPrice();
+        (info.auctionSuccessful) = crowdsale.auctionSuccessful();
+        info.tokenInfo = getTokenInfo(crowdsale.auctionToken());
+
+        address paymentCurrency = crowdsale.paymentCurrency();
+        TokenInfo memory paymentCurrencyInfo;
+        if(paymentCurrency == ETH_ADDRESS) {
+            paymentCurrencyInfo = _getETHInfo();
+        } else {
+            paymentCurrencyInfo = getTokenInfo(paymentCurrency);
+        }
+        info.paymentCurrencyInfo = paymentCurrencyInfo;
+
+        info.documents = getDocuments(_crowdsale);
+
+        return info;
+    }
+
+    function getDutchAuctionInfo(address payable _dutchAuction) public view returns (DutchAuctionInfo memory)
+    {
+        IDutchAuction dutchAuction = IDutchAuction(_dutchAuction);
+        DutchAuctionInfo memory info;
+
+        info.addr = address(dutchAuction);
+        (info.startTime, info.endTime, info.totalTokens) = dutchAuction.marketInfo();
+        (info.startPrice, info.minimumPrice) = dutchAuction.marketPrice();
+        (info.auctionSuccessful) = dutchAuction.auctionSuccessful();
+        (
+            info.commitmentsTotal,
+            info.finalized,
+            info.usePointList
+        ) = dutchAuction.marketStatus();
+        info.tokenInfo = getTokenInfo(dutchAuction.auctionToken());
+
+        address paymentCurrency = dutchAuction.paymentCurrency();
+        TokenInfo memory paymentCurrencyInfo;
+        if(paymentCurrency == ETH_ADDRESS) {
+            paymentCurrencyInfo = _getETHInfo();
+        } else {
+            paymentCurrencyInfo = getTokenInfo(paymentCurrency);
+        }
+        info.paymentCurrencyInfo = paymentCurrencyInfo;
+        info.documents = getDocuments(_dutchAuction);
+
+        return info;
+    }
+
+    function getBatchAuctionInfo(address payable _batchAuction) public view returns (BatchAuctionInfo memory) 
+    {
+        IBatchAuction batchAuction = IBatchAuction(_batchAuction);
+        BatchAuctionInfo memory info;
+        
+        info.addr = address(batchAuction);
+        (info.startTime, info.endTime, info.totalTokens) = batchAuction.marketInfo();
+        (info.auctionSuccessful) = batchAuction.auctionSuccessful();
+        (
+            info.commitmentsTotal,
+            info.minimumCommitmentAmount,
+            info.finalized,
+            info.usePointList
+        ) = batchAuction.marketStatus();
+        info.tokenInfo = getTokenInfo(batchAuction.auctionToken());
+        address paymentCurrency = batchAuction.paymentCurrency();
+        TokenInfo memory paymentCurrencyInfo;
+        if(paymentCurrency == ETH_ADDRESS) {
+            paymentCurrencyInfo = _getETHInfo();
+        } else {
+            paymentCurrencyInfo = getTokenInfo(paymentCurrency);
+        }
+        info.paymentCurrencyInfo = paymentCurrencyInfo;
+        info.documents = getDocuments(_batchAuction);
+
+        return info;
+    }
+
+    function getHyperbolicAuctionInfo(address payable _hyperbolicAuction) public view returns (HyperbolicAuctionInfo memory)
+    {
+        IHyperbolicAuction hyperbolicAuction = IHyperbolicAuction(_hyperbolicAuction);
+        HyperbolicAuctionInfo memory info;
+
+        info.addr = address(hyperbolicAuction);
+        (info.startTime, info.endTime, info.totalTokens) = hyperbolicAuction.marketInfo();
+        (info.minimumPrice, info.alpha) = hyperbolicAuction.marketPrice();
+        (info.auctionSuccessful) = hyperbolicAuction.auctionSuccessful();
+        (
+            info.commitmentsTotal,
+            info.finalized,
+            info.usePointList
+        ) = hyperbolicAuction.marketStatus();
+        info.tokenInfo = getTokenInfo(hyperbolicAuction.auctionToken());
+        
+        address paymentCurrency = hyperbolicAuction.paymentCurrency();
+        TokenInfo memory paymentCurrencyInfo;
+        if(paymentCurrency == ETH_ADDRESS) {
+            paymentCurrencyInfo = _getETHInfo();
+        } else {
+            paymentCurrencyInfo = getTokenInfo(paymentCurrency);
+        }
+        info.paymentCurrencyInfo = paymentCurrencyInfo;
+        info.documents = getDocuments(_hyperbolicAuction);
+
+        return info;
+    }
+
+    function getUserMarketInfo(address _action, address _user) public view returns(UserMarketInfo memory userInfo) {
+        IAntMarket market = IAntMarket(_action);
+        userInfo.commitments = market.commitments(_user);
+        userInfo.tokensClaimable = market.tokensClaimable(_user);
+        userInfo.claimed = market.claimed(_user);
+        userInfo.isAdmin = market.hasAdminRole(_user);
+    }
+
+    function _getETHInfo() private pure returns(TokenInfo memory token) {
+            token.addr = ETH_ADDRESS;
+            token.name = "ETHEREUM";
+            token.symbol = "ETH";
+            token.decimals = 18;
+    }
+
+}
+
+contract ANTHelper is MarketHelper, FarmHelper {
+
+    constructor(
+        address _accessControls,
+        address _tokenFactory,
+        address _market,
+        address _launcher,
+        address _farmFactory
+    ) public { 
+        require(_accessControls != address(0));
+        accessControls = ANTAccessControls(_accessControls);
+        tokenFactory = IAntTokenFactory(_tokenFactory);
+        market = IAntMarketFactory(_market);
+        launcher = _launcher;
+        farmFactory = IAntFarmFactory(_farmFactory);
+    }
+
+    function getTokens() public view returns(TokenInfo[] memory) {
+        address[] memory tokens = tokenFactory.getTokens();
+        TokenInfo[] memory infos = getTokensInfo(tokens);
+
+        infos = getTokensInfo(tokens);
+
+        return infos;
+    }
+
+    function getTokens(
+        uint256 pageSize,
+        uint256 pageNbr,
+        uint256 offset
+    ) public view returns(TokenInfo[] memory) {
+        uint256 tokensLength = tokenFactory.numberOfTokens();
+
+        uint256 startIdx = (pageNbr * pageSize) + offset;
+        uint256 endIdx = startIdx + pageSize;
+        TokenInfo[] memory infos;
+        if (endIdx > tokensLength) {
+            endIdx = tokensLength;
+        }
+        if(endIdx < startIdx) {
+            return infos;
+        }
+        infos = new TokenInfo[](endIdx - startIdx);
+
+        for (uint256 tokenIdx = 0; tokenIdx + startIdx < endIdx; tokenIdx++) {
+            address tokenAddress = tokenFactory.tokens(tokenIdx + startIdx);
+            infos[tokenIdx] = getTokenInfo(tokenAddress);
+        }
+
+        return infos;
+    }
+
+    function getTokens(
+        uint256 pageSize,
+        uint256 pageNbr
+    ) public view returns(TokenInfo[] memory) {
+        return getTokens(pageSize, pageNbr, 0);
+    }
+
+}
