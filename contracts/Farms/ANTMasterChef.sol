@@ -13,15 +13,13 @@ contract ANTMasterChef is IAntFarm, ANTAccessControls, SafeTransfer {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-
-    
     struct UserInfo {
         uint256 amount;     
         uint256 rewardDebt; 
         
     }
 
-    
+   
     struct PoolInfo {
         IERC20 lpToken;             
         uint256 allocPoint;         
@@ -136,3 +134,163 @@ contract ANTMasterChef is IAntFarm, ANTAccessControls, SafeTransfer {
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint;
     }
+
+    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+        uint256 remaining = blocksRemaining();
+        uint multiplier = 0;
+        if (remaining == 0) {
+            return 0;
+        } 
+        if (_to <= bonusEndBlock) {
+            multiplier = _to.sub(_from).mul(bonusMultiplier);
+        } else if (_from >= bonusEndBlock) {
+            multiplier = _to.sub(_from);
+        } else {
+            multiplier = bonusEndBlock.sub(_from).mul(bonusMultiplier).add(
+                _to.sub(bonusEndBlock)
+            );
+        }
+
+        if (multiplier > remaining ) {
+            multiplier = remaining;
+        }
+        return multiplier;
+    }
+
+    function pendingRewards(uint256 _pid, address _user) external view returns (uint256) {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_user];
+        uint256 accRewardsPerShare = pool.accRewardsPerShare;
+        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
+            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 rewardsAccum = multiplier.mul(rewardsPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+            accRewardsPerShare = accRewardsPerShare.add(rewardsAccum.mul(1e12).div(lpSupply));
+        }
+        return user.amount.mul(accRewardsPerShare).div(1e12).sub(user.rewardDebt);
+    }
+
+    function massUpdatePools() public {
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid) {
+            updatePool(pid);
+        }
+    }
+
+    function updatePool(uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        if (block.number <= pool.lastRewardBlock) {
+            return;
+        }
+        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        if (lpSupply == 0) {
+            pool.lastRewardBlock = block.number;
+            return;
+        }
+        uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+        uint256 rewardsAccum = multiplier.mul(rewardsPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+        if (devPercentage > 0) {
+            tips = tips.add(rewardsAccum.mul(devPercentage).div(1000));
+        }
+        totalRewardDebt = totalRewardDebt.add(rewardsAccum);
+        pool.accRewardsPerShare = pool.accRewardsPerShare.add(rewardsAccum.mul(1e12).div(lpSupply));
+        pool.lastRewardBlock = block.number;
+    }
+
+    function deposit(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
+        if (user.amount > 0) {
+            uint256 pending = user.amount.mul(pool.accRewardsPerShare).div(1e12).sub(user.rewardDebt);
+            if(pending > 0) {
+                totalRewardDebt = totalRewardDebt.sub(pending);
+                safeRewardsTransfer(msg.sender, pending);
+            }
+        }
+        if(_amount > 0) {
+            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+            user.amount = user.amount.add(_amount);
+        }
+        user.rewardDebt = user.amount.mul(pool.accRewardsPerShare).div(1e12);
+        emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    function withdraw(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        require(user.amount >= _amount, "withdraw: not good");
+        updatePool(_pid);
+        uint256 pending = user.amount.mul(pool.accRewardsPerShare).div(1e12).sub(user.rewardDebt);
+        if(pending > 0) {
+            totalRewardDebt = totalRewardDebt.sub(pending);
+            safeRewardsTransfer(msg.sender, pending);
+        }
+        if(_amount > 0) {
+            user.amount = user.amount.sub(_amount);
+            pool.lpToken.safeTransfer(address(msg.sender), _amount);
+        }
+        user.rewardDebt = user.amount.mul(pool.accRewardsPerShare).div(1e12);
+        emit Withdraw(msg.sender, _pid, _amount);
+    }
+
+    function emergencyWithdraw(uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        uint256 amount = user.amount;
+        user.amount = 0;
+        user.rewardDebt = 0;
+        pool.lpToken.safeTransfer(address(msg.sender), amount);
+        emit EmergencyWithdraw(msg.sender, _pid, amount);
+    }
+
+    function safeRewardsTransfer(address _to, uint256 _amount) internal {
+        uint256 rewardsBal = rewards.balanceOf(address(this));
+        if (_amount > rewardsBal) {
+            _safeTransfer(address(rewards), _to, rewardsBal);
+        } else {
+            _safeTransfer(address(rewards), _to, _amount);
+        }
+    }
+
+    function tokensRemaining() public view returns(uint256) {
+        return rewards.balanceOf(address(this));
+    }
+
+    function tokenDebt() public view returns(uint256) {
+        return  totalRewardDebt.add(tips);
+    }
+    
+    function blocksRemaining() public view returns (uint256){
+        if (tokensRemaining() <= tokenDebt()) {
+            return 0;
+        }
+        uint256 rewardsBal = tokensRemaining().sub(tokenDebt()) ;
+        if (rewardsPerBlock > 0) {
+            if (devPercentage > 0) {
+                rewardsBal = rewardsBal.mul(1000).div(devPercentage.add(1000));
+            }
+            return rewardsBal / rewardsPerBlock;
+        } else {
+            return 0;
+        }
+    }
+
+    function claimTips() public {
+        require(msg.sender == devaddr, "dev: wut?");
+        require(tips > 0, "dev: broke");
+        uint256 claimable = tips;
+        tips = 0;
+        safeRewardsTransfer(devaddr, claimable);
+    }
+
+    function dev(address _devaddr) public {
+        require(msg.sender == devaddr, "dev: wut?");
+        devaddr = _devaddr;
+    }
+
+    function setDevPercentage(uint256 _devPercentage) public {
+        require(msg.sender == devaddr, "dev: wut?");
+        devPercentage = _devPercentage;
+    }   
+}
