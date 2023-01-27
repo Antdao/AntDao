@@ -195,3 +195,275 @@ contract HyperbolicAuction is IAntMarket, ANTAccessControls, BoringBatchable, Sa
             _addCommitment(_from, tokensToTransfer);
         }
     }
+
+
+    function totalTokensCommitted() public view returns (uint256) {
+        return uint256(marketStatus.commitmentsTotal).mul(1e18).div(clearingPrice());
+    }
+
+    function calculateCommitment(uint256 _commitment) public view returns (uint256 ) {
+        uint256 maxCommitment = uint256(marketInfo.totalTokens).mul(clearingPrice()).div(1e18);
+        if (uint256(marketStatus.commitmentsTotal).add(_commitment) > maxCommitment) {
+            return maxCommitment.sub(uint256(marketStatus.commitmentsTotal));
+        }
+        return _commitment;
+    }
+
+
+    function _addCommitment(address _addr, uint256 _commitment) internal {
+        require(block.timestamp >= uint256(marketInfo.startTime) && block.timestamp <= uint256(marketInfo.endTime), "HyperbolicAuction: outside auction hours"); 
+        MarketStatus storage status = marketStatus;
+        require(!status.finalized, "HyperbolicAuction: auction already finalized");
+
+        uint256 newCommitment = commitments[_addr].add(_commitment);
+        if (status.usePointList) {
+            require(IPointList(pointList).hasPoints(_addr, newCommitment));
+        }
+
+        commitments[_addr] = newCommitment;
+        status.commitmentsTotal = BoringMath.to128(uint256(status.commitmentsTotal).add(_commitment));
+        emit AddedCommitment(_addr, _commitment);
+    }
+
+
+    function auctionSuccessful() public view returns (bool) {
+        return tokenPrice() >= clearingPrice();
+    }
+
+    function auctionEnded() public view returns (bool) {
+        return auctionSuccessful() || block.timestamp > uint256(marketInfo.endTime);
+    }
+
+    function finalized() public view returns (bool) {
+        return marketStatus.finalized;
+    }
+
+    function finalizeTimeExpired() public view returns (bool) {
+        return uint256(marketInfo.endTime) + 7 days < block.timestamp;
+    }
+
+    function finalize()
+        public   nonReentrant 
+    {
+        require(hasAdminRole(msg.sender) 
+                || wallet == msg.sender
+                || hasSmartContractRole(msg.sender) 
+                || finalizeTimeExpired(), "HyperbolicAuction: sender must be an admin");
+        MarketStatus storage status = marketStatus;
+        MarketInfo storage info = marketInfo;
+        require(info.totalTokens > 0, "Not initialized");
+
+        require(!status.finalized, "HyperbolicAuction: auction already finalized");
+        if (auctionSuccessful()) {
+            _safeTokenPayment(paymentCurrency, wallet, uint256(status.commitmentsTotal));
+        } else {
+            require(block.timestamp > uint256(info.endTime), "HyperbolicAuction: auction has not finished yet"); 
+            _safeTokenPayment(auctionToken, wallet, uint256(info.totalTokens));
+        }
+        status.finalized = true;
+        emit AuctionFinalized();
+    }
+
+    unction cancelAuction() public   nonReentrant  
+    {
+        require(hasAdminRole(msg.sender));
+        MarketStatus storage status = marketStatus;
+        require(!status.finalized, "HyperbolicAuction: auction already finalized");
+        require( uint256(status.commitmentsTotal) == 0, "HyperbolicAuction: auction already committed" );
+
+        _safeTokenPayment(auctionToken, wallet, uint256(marketInfo.totalTokens));
+
+        status.finalized = true;
+        emit AuctionCancelled();
+    }
+
+    function tokensClaimable(address _user) public view returns (uint256 claimerCommitment) {
+        if (commitments[_user] == 0) return 0;
+        uint256 unclaimedTokens = IERC20(auctionToken).balanceOf(address(this));
+        claimerCommitment = commitments[_user].mul(uint256(marketInfo.totalTokens)).div(uint256(marketStatus.commitmentsTotal));
+        claimerCommitment = claimerCommitment.sub(claimed[_user]);
+
+        if(claimerCommitment > unclaimedTokens){
+            claimerCommitment = unclaimedTokens;
+        }
+    }
+
+
+    function withdrawTokens() public  {
+        withdrawTokens(msg.sender);
+    }
+
+    function withdrawTokens(address payable beneficiary) 
+        public   nonReentrant 
+    {
+        if (auctionSuccessful()) {
+            require(marketStatus.finalized, "HyperbolicAuction: not finalized");
+            uint256 tokensToClaim = tokensClaimable(beneficiary);
+            require(tokensToClaim > 0, "HyperbolicAuction: no tokens to claim"); 
+            claimed[beneficiary] = claimed[beneficiary].add(tokensToClaim);
+
+            _safeTokenPayment(auctionToken, beneficiary, tokensToClaim);
+        } else {
+            require(block.timestamp > uint256(marketInfo.endTime), "HyperbolicAuction: auction has not finished yet");
+            uint256 fundsCommitted = commitments[beneficiary];
+            commitments[beneficiary] = 0;
+            _safeTokenPayment(paymentCurrency, beneficiary, fundsCommitted);
+        }
+    }
+
+
+    function setDocument(string calldata _name, string calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        _setDocument( _name, _data);
+    }
+
+    function setDocuments(string[] calldata _name, string[] calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        uint256 numDocs = _name.length;
+        for (uint256 i = 0; i < numDocs; i++) {
+            _setDocument( _name[i], _data[i]);
+        }
+    }
+
+    function removeDocument(string calldata _name) external {
+        require(hasAdminRole(msg.sender));
+        _removeDocument(_name);
+    }
+
+
+    function setList(address _list) external {
+        require(hasAdminRole(msg.sender));
+        _setList(_list);
+    }
+
+    function enableList(bool _status) external {
+        require(hasAdminRole(msg.sender));
+        marketStatus.usePointList = _status;
+
+        emit AuctionPointListUpdated(pointList, marketStatus.usePointList);
+    }
+
+    function _setList(address _pointList) private {
+        if (_pointList != address(0)) {
+            pointList = _pointList;
+            marketStatus.usePointList = true;
+        }
+
+        emit AuctionPointListUpdated(pointList, marketStatus.usePointList);
+    }
+
+    function setAuctionTime(uint256 _startTime, uint256 _endTime) external {
+        require(hasAdminRole(msg.sender));
+        require(_startTime < 10000000000, "HyperbolicAuction: enter an unix timestamp in seconds, not miliseconds");
+        require(_endTime < 10000000000, "HyperbolicAuction: enter an unix timestamp in seconds, not miliseconds");
+        require(_startTime >= block.timestamp, "HyperbolicAuction: start time msut be older than current time");
+        require(_endTime > _startTime, "HyperbolicAuction: end time must be older than start price");
+        require(marketStatus.commitmentsTotal == 0, "HyperbolicAuction: auction cannot have already started");
+
+        marketInfo.startTime = BoringMath.to64(_startTime);
+        marketInfo.endTime = BoringMath.to64(_endTime);
+
+        uint64 _duration = marketInfo.endTime - marketInfo.startTime;        
+        uint256 _alpha = uint256(_duration).mul(uint256(marketPrice.minimumPrice));
+        marketPrice.alpha = BoringMath.to128(_alpha);
+        
+        emit AuctionTimeUpdated(_startTime,_endTime);
+    }
+
+    function setAuctionPrice( uint256 _minimumPrice) external {
+        require(hasAdminRole(msg.sender));
+        require(_minimumPrice > 0, "HyperbolicAuction: minimum price must be greater than 0"); 
+        require(marketStatus.commitmentsTotal == 0, "HyperbolicAuction: auction cannot have already started");
+
+        marketPrice.minimumPrice = BoringMath.to128(_minimumPrice);
+
+        uint64 _duration = marketInfo.endTime - marketInfo.startTime;        
+        uint256 _alpha = uint256(_duration).mul(uint256(marketPrice.minimumPrice));
+        marketPrice.alpha = BoringMath.to128(_alpha);
+
+        emit AuctionPriceUpdated(_minimumPrice);
+    }
+
+    function setAuctionWallet(address payable _wallet) external {
+        require(hasAdminRole(msg.sender));
+        require(_wallet != address(0), "HyperbolicAuction: wallet is the zero address");
+
+        wallet = _wallet;
+
+        emit AuctionWalletUpdated(_wallet);
+    }
+
+    function init(bytes calldata _data) external override payable {
+    }
+
+    function initMarket(bytes calldata _data) public override {
+        (
+        address _funder,
+        address _token,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        address _paymentCurrency,
+        uint256 _factor,
+        uint256 _minimumPrice,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+        ) = abi.decode(_data, (
+            address,
+            address,
+            uint256,
+            uint256,
+            uint256,
+            address,
+            uint256,
+            uint256,
+            address,
+            address,
+            address
+        ));
+        initAuction(_funder, _token, _totalTokens, _startTime, _endTime, _paymentCurrency, _factor, _minimumPrice, _admin, _pointList, _wallet);
+    }
+
+    function getAuctionInitData(
+        address _funder,
+        address _token,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        address _paymentCurrency,
+        uint256 _factor,
+        uint256 _minimumPrice,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+    )
+        external pure returns (bytes memory _data) {
+            return abi.encode(
+                _funder,
+                _token,
+                _totalTokens,
+                _startTime,
+                _endTime,
+                _paymentCurrency,
+                _factor,
+                _minimumPrice,
+                _admin,
+                _pointList,
+                _wallet
+            );
+        }
+
+    function getBaseInformation() external view returns(
+        address , 
+        uint64 ,
+        uint64 ,
+        bool 
+    ) {
+        return (auctionToken, marketInfo.startTime, marketInfo.endTime, marketStatus.finalized);
+    }
+    
+    function getTotalTokens() external view returns(uint256) {
+        return uint256(marketInfo.totalTokens);
+    }
+}
