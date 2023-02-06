@@ -227,3 +227,255 @@ contract Crowdsale is IAntMarket, ANTAccessControls, BoringBatchable, SafeTransf
         }
     }
 
+
+    function tokensClaimable(address _user) public view returns (uint256 claimerCommitment) {
+        uint256 unclaimedTokens = IERC20(auctionToken).balanceOf(address(this));
+        claimerCommitment = _getTokenAmount(commitments[_user]);
+        claimerCommitment = claimerCommitment.sub(claimed[_user]);
+
+        if(claimerCommitment > unclaimedTokens){
+            claimerCommitment = unclaimedTokens;
+        }
+    }
+    
+    function finalize() public nonReentrant {
+        require(            
+            hasAdminRole(msg.sender) 
+            || wallet == msg.sender
+            || hasSmartContractRole(msg.sender) 
+            || finalizeTimeExpired(),
+            "Crowdsale: sender must be an admin"
+        );
+        MarketStatus storage status = marketStatus;
+        require(!status.finalized, "Crowdsale: already finalized");
+        MarketInfo storage info = marketInfo;
+        require(info.totalTokens > 0, "Not initialized");
+        require(auctionEnded(), "Crowdsale: Has not finished yet"); 
+
+        if (auctionSuccessful()) {
+            _safeTokenPayment(paymentCurrency, wallet, uint256(status.commitmentsTotal));
+            uint256 soldTokens = _getTokenAmount(uint256(status.commitmentsTotal));
+            uint256 unsoldTokens = uint256(info.totalTokens).sub(soldTokens);
+            if(unsoldTokens > 0) {
+                _safeTokenPayment(auctionToken, wallet, unsoldTokens);
+            }
+        } else {
+            _safeTokenPayment(auctionToken, wallet, uint256(info.totalTokens));
+        }
+
+        status.finalized = true;
+
+        emit AuctionFinalized();
+    }
+
+    function cancelAuction() public   nonReentrant  
+    {
+        require(hasAdminRole(msg.sender));
+        MarketStatus storage status = marketStatus;
+        require(!status.finalized, "Crowdsale: already finalized");
+        require( uint256(status.commitmentsTotal) == 0, "Crowdsale: Funds already raised" );
+
+        _safeTokenPayment(auctionToken, wallet, uint256(marketInfo.totalTokens));
+
+        status.finalized = true;
+        emit AuctionCancelled();
+    }
+
+    function tokenPrice() public view returns (uint256) {
+        return uint256(marketPrice.rate); 
+    }
+
+    function _getTokenPrice(uint256 _amount) internal view returns (uint256) {
+        return _amount.mul(uint256(marketPrice.rate)).div(AUCTION_TOKEN_DECIMALS);   
+    }
+
+    function getTokenAmount(uint256 _amount) public view returns (uint256) {
+        return _getTokenAmount(_amount);
+    }
+
+    function _getTokenAmount(uint256 _amount) internal view returns (uint256) {
+        return _amount.mul(AUCTION_TOKEN_DECIMALS).div(uint256(marketPrice.rate));
+    }
+
+    function isOpen() public view returns (bool) {
+        return block.timestamp >= uint256(marketInfo.startTime) && block.timestamp <= uint256(marketInfo.endTime);
+    }
+
+    function auctionSuccessful() public view returns (bool) {
+        return uint256(marketStatus.commitmentsTotal) >= uint256(marketPrice.goal);
+    }
+
+    function auctionEnded() public view returns (bool) {
+        return block.timestamp > uint256(marketInfo.endTime) || 
+        _getTokenAmount(uint256(marketStatus.commitmentsTotal) + 1) >= uint256(marketInfo.totalTokens);
+    }
+
+    function finalized() public view returns (bool) {
+        return marketStatus.finalized;
+    }
+
+    function finalizeTimeExpired() public view returns (bool) {
+        return uint256(marketInfo.endTime) + 7 days < block.timestamp;
+    }
+    
+
+    function setDocument(string calldata _name, string calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        _setDocument( _name, _data);
+    }
+
+    function setDocuments(string[] calldata _name, string[] calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        uint256 numDocs = _name.length;
+        for (uint256 i = 0; i < numDocs; i++) {
+            _setDocument( _name[i], _data[i]);
+        }
+    }
+
+    function removeDocument(string calldata _name) external {
+        require(hasAdminRole(msg.sender));
+        _removeDocument(_name);
+    }
+
+    
+    function setList(address _list) external {
+        require(hasAdminRole(msg.sender));
+        _setList(_list);
+    }
+
+    function enableList(bool _status) external {
+        require(hasAdminRole(msg.sender));
+        marketStatus.usePointList = _status;
+
+        emit AuctionPointListUpdated(pointList, marketStatus.usePointList);
+    }
+
+    function _setList(address _pointList) private {
+        if (_pointList != address(0)) {
+            pointList = _pointList;
+            marketStatus.usePointList = true;
+        }
+
+        emit AuctionPointListUpdated(pointList, marketStatus.usePointList);
+    }
+
+    
+    function setAuctionTime(uint256 _startTime, uint256 _endTime) external {
+        require(hasAdminRole(msg.sender));
+        require(_startTime < 10000000000, "Crowdsale: enter an unix timestamp in seconds, not miliseconds");
+        require(_endTime < 10000000000, "Crowdsale: enter an unix timestamp in seconds, not miliseconds");
+        require(_startTime >= block.timestamp, "Crowdsale: start time is before current time");
+        require(_endTime > _startTime, "Crowdsale: end time must be older than start price");
+
+        require(marketStatus.commitmentsTotal == 0, "Crowdsale: auction cannot have already started");
+
+        marketInfo.startTime = BoringMath.to64(_startTime);
+        marketInfo.endTime = BoringMath.to64(_endTime);
+        
+        emit AuctionTimeUpdated(_startTime,_endTime);
+    }
+
+    
+    function setAuctionPrice(uint256 _rate, uint256 _goal) external {
+        require(hasAdminRole(msg.sender));
+        require(_goal > 0, "Crowdsale: goal is 0");
+        require(_rate > 0, "Crowdsale: rate is 0");
+        require(marketStatus.commitmentsTotal == 0, "Crowdsale: auction cannot have already started");
+        marketPrice.rate = BoringMath.to128(_rate);
+        marketPrice.goal = BoringMath.to128(_goal);
+        require(_getTokenAmount(_goal) <= uint256(marketInfo.totalTokens), "Crowdsale: minimum target exceeds hard cap");
+
+        emit AuctionPriceUpdated(_rate,_goal);
+    }
+
+    
+    function setAuctionWallet(address payable _wallet) external {
+        require(hasAdminRole(msg.sender));
+        require(_wallet != address(0), "Crowdsale: wallet is the zero address");
+        wallet = _wallet;
+
+        emit AuctionWalletUpdated(_wallet);
+    }
+
+
+    
+    function init(bytes calldata _data) external override payable {
+
+    }
+
+    
+    function initMarket(bytes calldata _data) public override {
+        (
+        address _funder,
+        address _token,
+        address _paymentCurrency,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _rate,
+        uint256 _goal,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+        ) = abi.decode(_data, (
+            address,
+            address,
+            address,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            address,
+            address,
+            address
+            )
+        );
+    
+        initCrowdsale(_funder, _token, _paymentCurrency, _totalTokens, _startTime, _endTime, _rate, _goal, _admin, _pointList, _wallet);
+    }
+
+    
+    function getCrowdsaleInitData(
+        address _funder,
+        address _token,
+        address _paymentCurrency,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _rate,
+        uint256 _goal,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+    )
+        external pure returns (bytes memory _data)
+    {
+        return abi.encode(
+            _funder,
+            _token,
+            _paymentCurrency,
+            _totalTokens,
+            _startTime,
+            _endTime,
+            _rate,
+            _goal,
+            _admin,
+            _pointList,
+            _wallet
+            );
+    }
+    
+    function getBaseInformation() external view returns(
+        address, 
+        uint64,
+        uint64,
+        bool 
+    ) {
+        return (auctionToken, marketInfo.startTime, marketInfo.endTime, marketStatus.finalized);
+    }
+
+    function getTotalTokens() external view returns(uint256) {
+        return uint256(marketInfo.totalTokens);
+    }
+}
