@@ -251,5 +251,168 @@ contract BatchAuction is  IAntMarket, ANTAccessControls, BoringBatchable, SafeTr
     function auctionEnded() public view returns (bool) {
         return block.timestamp > marketInfo.endTime;
     }
+    function finalized() public view returns (bool) {
+        return marketStatus.finalized;
+    }
+
+    function finalizeTimeExpired() public view returns (bool) {
+        return uint256(marketInfo.endTime) + 7 days < block.timestamp;
+    }
+
+
+   
+    function setDocument(string calldata _name, string calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        _setDocument( _name, _data);
+    }
+
+    function setDocuments(string[] calldata _name, string[] calldata _data) external {
+        require(hasAdminRole(msg.sender) );
+        uint256 numDocs = _name.length;
+        for (uint256 i = 0; i < numDocs; i++) {
+            _setDocument( _name[i], _data[i]);
+        }
+    }
+
+    function removeDocument(string calldata _name) external {
+        require(hasAdminRole(msg.sender));
+        _removeDocument(_name);
+    }
+
+
+   
+    function setList(address _list) external {
+        require(hasAdminRole(msg.sender));
+        _setList(_list);
+    }
+
+    function enableList(bool _status) external {
+        require(hasAdminRole(msg.sender));
+        marketStatus.usePointList = _status;
+
+        emit AuctionPointListUpdated(pointList, marketStatus.usePointList);
+    }
+
+    function _setList(address _pointList) private {
+        if (_pointList != address(0)) {
+            pointList = _pointList;
+            marketStatus.usePointList = true;
+        }
+        
+        emit AuctionPointListUpdated(_pointList, marketStatus.usePointList);
+    }
 
     
+    function setAuctionTime(uint256 _startTime, uint256 _endTime) external {
+        require(hasAdminRole(msg.sender));
+        require(_startTime < 10000000000, "BatchAuction: enter an unix timestamp in seconds, not miliseconds");
+        require(_endTime < 10000000000, "BatchAuction: enter an unix timestamp in seconds, not miliseconds");
+        require(_startTime >= block.timestamp, "BatchAuction: start time is before current time");
+        require(_endTime > _startTime, "BatchAuction: end time must be older than start price");
+
+        require(marketStatus.commitmentsTotal == 0, "BatchAuction: auction cannot have already started");
+
+        marketInfo.startTime = BoringMath.to64(_startTime);
+        marketInfo.endTime = BoringMath.to64(_endTime);
+        
+        emit AuctionTimeUpdated(_startTime,_endTime);
+    }
+
+    
+    function setAuctionPrice(uint256 _minimumCommitmentAmount) external {
+        require(hasAdminRole(msg.sender));
+
+        require(marketStatus.commitmentsTotal == 0, "BatchAuction: auction cannot have already started");
+
+        marketStatus.minimumCommitmentAmount = BoringMath.to128(_minimumCommitmentAmount);
+
+        emit AuctionPriceUpdated(_minimumCommitmentAmount);
+    }
+
+    
+    function setAuctionWallet(address payable _wallet) external {
+        require(hasAdminRole(msg.sender));
+        require(_wallet != address(0), "BatchAuction: wallet is the zero address");
+
+        wallet = _wallet;
+
+        emit AuctionWalletUpdated(_wallet);
+    }
+
+
+    function init(bytes calldata _data) external override payable {
+    }
+
+    function initMarket(
+        bytes calldata _data
+    ) public override {
+        (
+        address _funder,
+        address _token,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        address _paymentCurrency,
+        uint256 _minimumCommitmentAmount,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+        ) = abi.decode(_data, (
+            address,
+            address,
+            uint256,
+            uint256,
+            uint256,
+            address,
+            uint256,
+            address,
+            address,
+            address
+        ));
+        initAuction(_funder, _token, _totalTokens, _startTime, _endTime, _paymentCurrency, _minimumCommitmentAmount, _admin, _pointList,  _wallet);
+    }
+
+     function getBatchAuctionInitData(
+       address _funder,
+        address _token,
+        uint256 _totalTokens,
+        uint256 _startTime,
+        uint256 _endTime,
+        address _paymentCurrency,
+        uint256 _minimumCommitmentAmount,
+        address _admin,
+        address _pointList,
+        address payable _wallet
+    )
+        external
+        pure
+        returns (bytes memory _data)
+    {
+        return abi.encode(
+            _funder,
+            _token,
+            _totalTokens,
+            _startTime,
+            _endTime,
+            _paymentCurrency,
+            _minimumCommitmentAmount,
+            _admin,
+            _pointList,
+            _wallet
+            );
+    }
+
+    function getBaseInformation() external view returns(
+        address token, 
+        uint64 startTime,
+        uint64 endTime,
+        bool marketFinalized
+    ) {
+        return (auctionToken, marketInfo.startTime, marketInfo.endTime, marketStatus.finalized);
+    }
+
+    function getTotalTokens() external view returns(uint256) {
+        return uint256(marketInfo.totalTokens);
+    }
+
+}
